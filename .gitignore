@@ -1,0 +1,96 @@
+# Dependencies
+node_modules
+node_modules/
+frontend/node_modules/
+
+# Python virtual environments
+.venv/
+backend/.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.cache/
+
+# Node locks & build artifacts
+#
+# `dist/` has been in this file the whole time and 520 KB of compiled output was
+# tracked underneath it anyway: an ignore rule does not apply to a file git has
+# already recorded. Same story as backend/.env. Untracked in #1348; the rule
+# only started meaning something at that point.
+dist/
+dist-ssr/
+.output/
+.nitro/
+.tanstack/
+.vite/
+
+# Environment files
+#
+# The leading **/ matters. A bare `.env` only matches the repository root, and
+# `backend/.env` was tracked for months underneath a rule that looked like it
+# covered it. Anything ending in .env or starting with .env is ignored at any
+# depth -- except the .example templates, which are meant to be committed.
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+
+# Local test databases and dumps
+*.db
+*.sqlite
+*.sqlite3
+*.sql.gz
+*.dump
+
+# Coverage output
+.coverage
+coverage.xml
+htmlcov/
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Runtime artifacts
+backend/logs/
+*.log
+docker-data/
+
+# One-off developer scratch files.
+#
+# The repository accumulated a dozen of these -- single-use codemods from past
+# merge cleanups, plus a 39 KB dump of a GitHub API response. They are dead
+# code that linters, test collection, and CodeQL all still walk.
+fix.py
+fix_*.py
+fix_*.sh
+patch_*.py
+resolve_merge.py
+resolve_conflicts.py
+pr[0-9]*.json
+pr_info.json
+old_*.tsx
+upstream_*.tsx
+
+# Tool output, committed by accident and then read as though it described the
+# current tree. `bandit_report.json` was a 363 KB security scan of a checkout
+# nobody could date; `tsc_errors_2.txt` was 70 KB of type errors that no longer
+# matched the 289 the branch actually had.
+bandit_report.json
+*_report.json
+tsc_errors*.txt
+files_changed.txt
+
+# Patches produced while resolving something, against bases that no longer
+# exist.
+*_patch.diff

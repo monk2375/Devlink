@@ -1,0 +1,204 @@
+import { useCallback, useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { activitiesApi, ActivityType } from "@/api/modules/activities";
+import { ActivityItem } from "./ActivityItem";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/shared/primitives";
+import { Activity } from "lucide-react";
+import { useIntersectionObserver } from "@/hooks/useIntersectionObserver";
+
+type FilterGroup = {
+  id: string;
+  label: string;
+  types: ActivityType[] | undefined;
+};
+
+const FILTERS: FilterGroup[] = [
+  { id: "all", label: "All Activity", types: undefined },
+  {
+    id: "projects",
+    label: "Projects",
+    types: ["project_created", "project_updated", "project_archived", "project_milestone"],
+  },
+  {
+    id: "teams",
+    label: "Teams",
+    types: ["team_invitation"],
+  },
+  {
+    id: "followers",
+    label: "Followers",
+    types: ["followed_user"],
+  },
+  {
+    id: "discussions",
+    label: "Discussions",
+    types: ["discussion_created", "comment_created"],
+  },
+  {
+    id: "ai_recommendations",
+    label: "AI Recommendations",
+    types: [],
+  },
+  {
+    id: "applications",
+    label: "Applications",
+    types: ["application_submitted", "application_accepted", "application_rejected"],
+  },
+  {
+    id: "profile",
+    label: "Profile Updates",
+    types: ["profile_updated", "user_registered"],
+  },
+];
+
+const PAGE_SIZE = 20;
+
+interface ActivityFeedProps {
+  actorId?: string;
+  targetId?: string;
+  targetType?: string;
+}
+
+function ActivitySkeleton() {
+  return (
+    <div className="flex gap-4 p-4 rounded-lg bg-white border border-gray-100">
+      <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+      <div className="flex-1 space-y-2">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-1/2" />
+      </div>
+    </div>
+  );
+}
+
+export function ActivityFeed({ actorId, targetId, targetType }: ActivityFeedProps) {
+  const [activeFilterId, setActiveFilterId] = useState<string>("all");
+  const [followingOnly, setFollowingOnly] = useState<boolean>(false);
+
+  const activeFilter = FILTERS.find((f) => f.id === activeFilterId);
+  const activityTypes = activeFilter?.types;
+
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, status } = useInfiniteQuery({
+    queryKey: ["activities", { actorId, targetId, targetType, activityTypes, followingOnly }],
+    queryFn: async ({ pageParam }) => {
+      const response = await activitiesApi.getFeed({
+        limit: PAGE_SIZE,
+        cursor: pageParam as string | undefined,
+        actor_id: actorId,
+        target_id: targetId,
+        target_type: targetType,
+        activity_types: activityTypes,
+        following_only: followingOnly,
+      });
+      return response;
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => {
+      if (!lastPage || lastPage.length < PAGE_SIZE) return undefined;
+      return lastPage[lastPage.length - 1].created_at;
+    },
+  });
+
+  const handleIntersect = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // `enabled` deliberately leaves out `isFetchingNextPage`. Toggling it off
+  // while a page loads tears the observer down, and the fresh one built when
+  // the fetch finishes reports the still-visible sentinel immediately, which
+  // asks for the next page, which toggles it again. `handleIntersect` already
+  // refuses to stack fetches, so the observer can just stay up.
+  const sentinelRef = useIntersectionObserver(handleIntersect, Boolean(hasNextPage));
+
+  const activities = data?.pages.flatMap((page) => page) ?? [];
+
+  return (
+    <div className="w-full max-w-3xl mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-gray-100">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Activity filters">
+          {FILTERS.map((filter) => (
+            <button
+              key={filter.id}
+              onClick={() => setActiveFilterId(filter.id)}
+              aria-pressed={activeFilterId === filter.id}
+              className={`px-4 py-2 text-sm font-medium rounded-full transition-colors ${
+                activeFilterId === filter.id
+                  ? "bg-indigo-600 text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+
+        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={followingOnly}
+            onChange={(e) => setFollowingOnly(e.target.checked)}
+            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+          />
+          <span>Following Only</span>
+        </label>
+      </div>
+
+      <div className="space-y-4" role="feed" aria-busy={status === "pending" || isFetchingNextPage}>
+        {status === "pending" ? (
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <ActivitySkeleton key={i} />
+            ))}
+          </div>
+        ) : status === "error" ? (
+          <div className="p-8 text-center bg-red-50 text-red-600 rounded-lg border border-red-100">
+            <p>Failed to load activities. Please try again later.</p>
+          </div>
+        ) : activities.length === 0 ? (
+          <EmptyState
+            icon={Activity}
+            title="No activity found"
+            desc="Check back later, or clear your filter to see everything happening."
+            action={
+              activeFilterId !== "all" ? (
+                <button onClick={() => setActiveFilterId("all")} className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted">
+                  Clear filter
+                </button>
+              ) : undefined
+            }
+            className="rounded-xl border border-dashed border-border/80 bg-muted/20"
+          />
+        ) : (
+          <div className="space-y-3">
+            {activities.map((activity) => (
+              <ActivityItem key={activity.id} activity={activity} />
+            ))}
+
+            {isFetchingNextPage && (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <ActivitySkeleton key={i} />
+                ))}
+              </div>
+            )}
+
+            {/* Kept mounted across a fetch. Unmounting it hands the hook a null
+                node and then a brand new one, and a brand new observer reports
+                an already-visible sentinel immediately -- which is the other
+                half of the runaway pagination. */}
+            {hasNextPage && <div ref={sentinelRef} className="h-1" aria-hidden="true" />}
+
+            {!hasNextPage && activities.length > 0 && (
+              <p className="py-4 text-center text-sm text-gray-400">
+                You've reached the end of the feed.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
